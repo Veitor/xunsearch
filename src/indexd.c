@@ -59,7 +59,7 @@ G_VAR_DECL(user_base, void *);
  * Local static variables
  */
 static time_t time_logging;
-static int queue_size;
+static int queue_size, max_import_num;
 static char xs_import[128], xs_logging[128], *prog_name;
 static volatile int main_flag, import_num;
 
@@ -90,6 +90,7 @@ static void show_usage()
 	printf("  -l <log_file>    Specify the log output file, (default: none)\n");
 	printf("                   E.g: " DEFAULT_TEMP_DIR "%s.log, stderr\n", prog_name);
 	printf("  -q <num>         Set the queue size to commit, (default: %d)\n", DEFAULT_QUEUE_SIZE);
+	printf("  -f <num>         Set the max num of forked import processes, (default: %d)\n", DEFAULT_MAX_IMPORT_NUM);
 	printf("  -e <bin_path>    Set the external program path, (default: " DEFAULT_BIN_PATH ")\n");
 	printf("  -k [fast]<stop|start|restart|reload> Server process running control\n");
 	printf("  -v               Show version information\n");
@@ -250,7 +251,7 @@ static void db_commit_check()
 			}
 
 			// allow to submit small/forced request
-			if (import_num >= MAX_IMPORT_NUM && db->count > MIN_COMMIT_COUNT
+			if (import_num >= max_import_num && db->count > MIN_COMMIT_COUNT
 					&& !(db->flag & XS_DBF_FORCE_COMMIT)) {
 				log_notice("server is too busy to skip commit (IMPORT_NUM:%d, DB:%s.%s, COUNT:%d)",
 						import_num, user->name, db->name, db->count);
@@ -987,7 +988,7 @@ static int index_zcmd_exec(XS_CONN *conn)
 			break;
 			// force to flush logging
 		case CMD_FLUSH_LOGGING:
-			if (import_num >= MAX_IMPORT_NUM) {
+			if (import_num >= max_import_num) {
 				rc = CONN_RES_ERR(BUSY);
 			} else {
 				log_info_conn("force to call xs-logging (USER:%s)", conn->user->name);
@@ -1076,7 +1077,7 @@ static int index_zcmd_exec(XS_CONN *conn)
 				rc = CONN_RES_ERR(NODB);
 			} else if (conn->wdb->pid != 0) {
 				rc = CONN_RES_ERR(RUNNING);
-			} else if (import_num >= MAX_IMPORT_NUM) {
+			} else if (import_num >= max_import_num) {
 				rc = CONN_RES_ERR(BUSY);
 			} else {
 				log_info_conn("force to commit (DB:%s.%s)", conn->user->name, conn->wdb->name);
@@ -1134,7 +1135,7 @@ static int index_zcmd_exec(XS_CONN *conn)
 static void index_server_timeout()
 {
 	db_commit_check();
-	if (import_num < MAX_IMPORT_NUM) {
+	if (import_num < max_import_num) {
 		xs_logging_call(NULL);
 	}
 }
@@ -1154,6 +1155,7 @@ int main(int argc, char *argv[])
 	home = PREFIX;
 	bind = DEFAULT_BIND_PATH;
 	queue_size = DEFAULT_QUEUE_SIZE;
+	max_import_num = DEFAULT_MAX_IMPORT_NUM;
 	epath = DEFAULT_BIN_PATH;
 
 	time(&time_logging);
@@ -1192,6 +1194,12 @@ int main(int argc, char *argv[])
 				queue_size = atoi(optarg);
 				if (queue_size < 1) {
 					queue_size = DEFAULT_QUEUE_SIZE;
+				}
+				break;
+			case 'f':
+				max_import_num = atoi(optarg);
+				if (max_import_num < 1) {
+					max_import_num = DEFAULT_MAX_IMPORT_NUM;
 				}
 				break;
 			case 'e': epath = optarg;
