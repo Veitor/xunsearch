@@ -250,19 +250,9 @@ static void db_commit_check()
 				continue;
 			}
 
-			// allow to submit small/forced request
-			if (import_num >= max_import_num && db->count > MIN_COMMIT_COUNT
-					&& !(db->flag & XS_DBF_FORCE_COMMIT)) {
+			if (import_num >= max_import_num && !(db->flag & XS_DBF_FORCE_COMMIT)) {
 				log_notice("server is too busy to skip commit (IMPORT_NUM:%d, DB:%s.%s, COUNT:%d)",
 						import_num, user->name, db->name, db->count);
-				continue;
-			}
-
-			// avoid committing too frequent
-			if (!(db->flag & XS_DBF_FORCE_COMMIT)
-					&& db->count < MIN_COMMIT_COUNT && (now - db->ltime) < MIN_COMMIT_TIME) {
-				log_notice("skip too frequently commit (DB:%s.%s, COUNT:%d)",
-						user->name, db->name, db->count);
 				continue;
 			}
 
